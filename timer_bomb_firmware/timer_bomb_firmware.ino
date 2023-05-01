@@ -7,12 +7,15 @@
 #define disp_dio_pin 8
 #define play_pause_pin 2
 #define stop_pin 3
+#define time_up_sound_pin 10
+#define warning_sound_pin 11
 
 int rotation;
 int value;
 bool skip = false;
 bool armed = false;
 bool update_display = false;
+bool warning = false;
 bool time_up = false;
 
 int initial_seconds = 0;
@@ -50,6 +53,8 @@ void setup() {
   pinMode (rt_sw_pin,INPUT);
   pinMode (play_pause_pin,INPUT);
   pinMode (stop_pin,INPUT);
+  pinMode (time_up_sound_pin,INPUT);
+  pinMode (warning_sound_pin,INPUT);
   rotation = digitalRead(rt_clk_pin);
   Serial.println("Start");
 
@@ -69,14 +74,17 @@ ISR(TIMER1_COMPA_vect){//timer1 interrupt 1H
       armed = false;
       time_up = true;
     }
+    else if (seconds <= 5){
+      warning = true;
+    }
   }
 }
 
 void loop() {
 
-  if (time_up){
-    time_up = false;
-    //make sound
+  if (warning){
+    warning = false;
+    if (digitalRead(warning_sound_pin)) beep(100);
   }
 
   if (!armed){
@@ -110,6 +118,12 @@ void loop() {
   if (update_display){
     displayTime(seconds);
     update_display = false;
+  }
+
+  if (time_up){
+    time_up = false;
+    if (digitalRead(time_up_sound_pin)) beep(1500);
+    else if (digitalRead(warning_sound_pin)) beep(100); //To avoid silent final in case of warning sounds
   }
 }
 
@@ -153,4 +167,10 @@ void process_stop(){
     
     lastDebounceTime = millis();    
   }  
+}
+
+void beep(int time){
+  digitalWrite(output_pin, 1);
+  delay(time);
+  digitalWrite(output_pin, 0);
 }
