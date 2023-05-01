@@ -1,12 +1,12 @@
 #include "GyverTM1637.h"
-#define output_pin 8
-#define rt_clk_pin 3
-#define rt_dt_pin 4
-#define rt_sw_pin 5
-#define disp_clk_pin 6
-#define disp_dio_pin 7
+#define output_pin 9
+#define rt_clk_pin 4
+#define rt_dt_pin 5
+#define rt_sw_pin 6
+#define disp_clk_pin 7
+#define disp_dio_pin 8
 #define play_pause_pin 2
-#define stop_pin 10
+#define stop_pin 3
 
 int rotation;
 int value;
@@ -58,7 +58,7 @@ void setup() {
   displayTime(seconds);
 
   attachInterrupt(digitalPinToInterrupt(play_pause_pin), process_play_pause, RISING);
-  //attachInterrupt(digitalPinToInterrupt(stop_pin), process_stop, RISING);
+  attachInterrupt(digitalPinToInterrupt(stop_pin), process_stop, RISING);
 }
 
 ISR(TIMER1_COMPA_vect){//timer1 interrupt 1H
@@ -144,8 +144,7 @@ void process_play_pause(){
   }  
 }
 
-void process_stop(){  
-  Serial.println("Stop interrupt");
+void process_stop(){
   if(millis() - lastDebounceTime > debounceDelay){
     
     armed = false;
