@@ -11,8 +11,9 @@
 int rotation;
 int value;
 bool skip = false;
-bool active = false;
-bool stop_flag = false;
+bool armed = false;
+bool update_display = false;
+bool time_up = false;
 
 int initial_seconds = 0;
 int seconds = 0;
@@ -24,6 +25,24 @@ unsigned long debounceDelay = 300;    // the debounce time; increase if the outp
 GyverTM1637 disp(disp_clk_pin, disp_dio_pin);
 
 void setup() {
+
+  cli();//stop interrupts
+
+  //set timer1 interrupt at 1Hz
+  TCCR1A = 0;// set entire TCCR1A register to 0
+  TCCR1B = 0;// same for TCCR1B
+  TCNT1  = 0;//initialize counter value to 0
+  // set compare match register for 1hz increments
+  OCR1A = 15624;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+  // turn on CTC mode
+  TCCR1B |= (1 << WGM12);
+  // Set CS12 and CS10 bits for 1024 prescaler
+  TCCR1B |= (1 << CS12) | (1 << CS10);  
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
+
+  sei();//allow interrupts
+
   Serial.begin (9600);
   pinMode(output_pin, OUTPUT);
   pinMode (rt_clk_pin,INPUT);
@@ -39,24 +58,28 @@ void setup() {
   displayTime(seconds);
 
   attachInterrupt(digitalPinToInterrupt(play_pause_pin), process_play_pause, RISING);
-  attachInterrupt(digitalPinToInterrupt(stop_pin), process_stop, RISING);
+  //attachInterrupt(digitalPinToInterrupt(stop_pin), process_stop, RISING);
+}
+
+ISR(TIMER1_COMPA_vect){//timer1 interrupt 1H
+  if (armed){
+    seconds--;
+    update_display = true;
+    if (seconds == 0){
+      armed = false;
+      time_up = true;
+    }
+  }
 }
 
 void loop() {
 
-  if (stop_flag){
-    stop();
-    stop_flag = false;
+  if (time_up){
+    time_up = false;
+    //make sound
   }
 
-  if (active){
-    delay(1000);
-    new_seconds--;
-    if(new_seconds == 0){
-      deactivate();
-    } 
-  }  
-  else {    
+  if (!armed){
     value = digitalRead(rt_clk_pin);
      if (value != rotation){ // we use the DT pin to find out which way we turning.
 
@@ -66,24 +89,27 @@ void loop() {
       else{
         skip = true;
         if (digitalRead(rt_dt_pin) != value) {  // Clockwise
-          new_seconds += secondsStep(seconds);
+          seconds += secondsStep(seconds);
         } else { //Counterclockwise
-          new_seconds -= secondsStep(seconds-1);
-          if(new_seconds < 0) new_seconds = 0;
+          seconds -= secondsStep(seconds-1);
+          if(seconds < 0) seconds = 0;
         }
+        update_display = true;
+        initial_seconds = seconds;
       }          
    } 
    rotation = value;
 
    if(!digitalRead(rt_sw_pin)){
-     new_seconds = 0;
-   }    
+     seconds = 0;
+     update_display = true;
+     initial_seconds = seconds;
+   } 
   }
 
-  if (seconds != new_seconds){
-    seconds = new_seconds;
-    initial_seconds = new_seconds;
+  if (update_display){
     displayTime(seconds);
+    update_display = false;
   }
 }
 
@@ -109,30 +135,11 @@ void displayTime(int value){
   disp.point(true);
 }
 
-void activate(){
-  active = true;
-  digitalWrite(output_pin, 1);
-}
-
-void deactivate(){
-  active = false;
-  digitalWrite(output_pin, 0);
-}
-
-void stop(){
-  active = false;
-  new_seconds = initial_seconds;
-  digitalWrite(output_pin, 0);
-}
-
-void switch_state(){
-  if(!active && seconds > 0) activate();
-  else if (active) deactivate();
-}
-
 void process_play_pause(){
   if(millis() - lastDebounceTime > debounceDelay){
-    switch_state();
+    
+    if(seconds > 0) armed = !armed;
+    
     lastDebounceTime = millis();    
   }  
 }
@@ -140,7 +147,11 @@ void process_play_pause(){
 void process_stop(){  
   Serial.println("Stop interrupt");
   if(millis() - lastDebounceTime > debounceDelay){
-    stop_flag = true;
+    
+    armed = false;
+    seconds = initial_seconds;
+    update_display = true;
+    
     lastDebounceTime = millis();    
   }  
 }
