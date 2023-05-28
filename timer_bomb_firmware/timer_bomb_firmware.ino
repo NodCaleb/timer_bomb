@@ -152,7 +152,10 @@ void displayTime(int value){
 void process_play_pause(){
   if(millis() - lastDebounceTime > debounceDelay){
     
-    if(seconds > 0) armed = !armed;
+    if(seconds > 0) {
+      armed = !armed;
+      warning = true; 
+    }
     
     lastDebounceTime = millis();    
   }  
@@ -164,6 +167,7 @@ void process_stop(){
     armed = false;
     seconds = initial_seconds;
     update_display = true;
+    warning = true;
     
     lastDebounceTime = millis();    
   }  
