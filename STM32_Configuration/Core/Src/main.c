@@ -33,6 +33,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define spi_latch_pin	LL_GPIO_PIN_4
+#define rt_dt_pin 		LL_GPIO_PIN_3
+#define rt_sw_pin		LL_GPIO_PIN_2
+#define play_pause_pin	LL_GPIO_PIN_1
+#define stop_pin		LL_GPIO_PIN_0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -42,7 +47,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
-
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
@@ -59,6 +63,7 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 static void UART_Init(void);
+void One_Second_Tick(void);
 void Set_Digit_Value(uint8_t digit);
 void Set_Digit_Index(uint8_t index);
 void Transmit_SPI(void);
@@ -107,7 +112,7 @@ int main(void)
   UART_Init();
   HAL_TIM_Base_Start_IT(&htim1); // запуск таймера
 
-  LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_4, LL_GPIO_MODE_OUTPUT); //SPI latch
+  USART1->DR = 0x53; //Start MCU debug signal
 
   /* USER CODE END 2 */
 
@@ -250,12 +255,38 @@ static void MX_TIM1_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 //  __HAL_RCC_GPIOB_CLK_ENABLE();
 
+  //SPI latch config
+	LL_GPIO_SetPinMode(GPIOA, spi_latch_pin, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinOutputType(GPIOA, spi_latch_pin, LL_GPIO_OUTPUT_PUSHPULL);
+
+	/*Configure GPIO pin : PA0 */
+	  GPIO_InitStruct.Pin = GPIO_PIN_0;
+	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+	  GPIO_InitStruct.Pull = GPIO_PULLUP;
+	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	  /* EXTI interrupt init*/
+	  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+	  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+//	LL_GPIO_SetPinMode(GPIOA, rt_dt_pin, LL_GPIO_MODE_INPUT);
+//	LL_GPIO_SetPinPull(GPIOA, rt_dt_pin, LL_GPIO_PULL_DOWN);
+//
+//	LL_GPIO_SetPinMode(GPIOA, rt_sw_pin, LL_GPIO_MODE_INPUT);
+//	LL_GPIO_SetPinMode(GPIOA, rt_sw_pin, LL_GPIO_PULL_DOWN);
+//
+//	LL_GPIO_SetPinPull(GPIOA, play_pause_pin, LL_GPIO_MODE_INPUT);
+//	LL_GPIO_SetPinMode(GPIOA, play_pause_pin, LL_GPIO_PULL_UP);
+//
+//	LL_GPIO_SetPinPull(GPIOA, stop_pin, LL_GPIO_MODE_INPUT);
+//	LL_GPIO_SetPinPull(GPIOA, stop_pin, LL_GPIO_PULL_UP);
 }
 
 /* USER CODE BEGIN 4 */
@@ -284,13 +315,33 @@ static void UART_Init(void){
 	NVIC_EnableIRQ (USART1_IRQn);
 }
 
+//External Interrupt ISR Handler CallBackFun
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == GPIO_PIN_0) // Play/pause button
+    {
+    	USART1->DR = 0x30; //Debug signal
+    }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+
+	if(htim == &htim1){ //Check if it's TIM1
+		millis++;
+		if (millis == 1000){
+			millis = 0;
+			One_Second_Tick();
+		}
+	}
+}
 
 //Ticks once per second
 void One_Second_Tick(void){
-	USART1->DR = 0x53;
+
+	//USART1->DR = 0x53; Send char 'S' to UART (to test that UART and timer work)
 
 	seconds_value++;
-	if(seconds_value == 6000)
+	if(seconds_value == 3600)
 		seconds_value = 0;
 
 }
@@ -322,9 +373,9 @@ void Set_Digit_Index(uint8_t index){
 }
 
 void Transmit_SPI(void){
-	LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_4);
+	LL_GPIO_ResetOutputPin(GPIOA, spi_latch_pin);
 	HAL_SPI_Transmit(&hspi1, p_data, 2, 0xFFFF);
-	LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_4);
+	LL_GPIO_SetOutputPin(GPIOA, spi_latch_pin);
 }
 
 void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3){
