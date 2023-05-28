@@ -345,6 +345,7 @@ void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t d
 
 	Set_Digit_Value(digit_1);
 	Set_Digit_Index(1);
+	spi_data[1] |= 0x80; //Display dots
 	Transmit_SPI();
 
 	Set_Digit_Value(digit_2);
