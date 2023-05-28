@@ -51,6 +51,7 @@ TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
 uint16_t millis = 0;
+uint16_t cool_down_millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
 uint8_t *p_data = spi_data;
@@ -276,6 +277,16 @@ static void MX_GPIO_Init(void)
 	  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
 	  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
+	/*Configure GPIO pin : PA1 */
+	  GPIO_InitStruct.Pin = GPIO_PIN_1;
+	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+	  GPIO_InitStruct.Pull = GPIO_PULLUP;
+	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	  /* EXTI interrupt init*/
+	  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+	  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
 //	LL_GPIO_SetPinMode(GPIOA, rt_dt_pin, LL_GPIO_MODE_INPUT);
 //	LL_GPIO_SetPinPull(GPIOA, rt_dt_pin, LL_GPIO_PULL_DOWN);
 //
@@ -320,7 +331,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if(GPIO_Pin == GPIO_PIN_0) // Play/pause button
     {
-    	USART1->DR = 0x30; //Debug signal
+    	if (cool_down_millis == 0){
+    		cool_down_millis = 200;
+    		USART1->DR = 0x30; //Debug signal
+    		seconds_value = 0;
+    	}
+    }
+
+    if(GPIO_Pin == GPIO_PIN_1) // Play/pause button
+    {
+    	if (cool_down_millis == 0){
+    		cool_down_millis = 200;
+    		USART1->DR = 0x31; //Debug signal
+    		seconds_value += 5;
+    	}
     }
 }
 
@@ -332,6 +356,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			millis = 0;
 			One_Second_Tick();
 		}
+
+		if(cool_down_millis > 0)
+			cool_down_millis--;
 	}
 }
 
