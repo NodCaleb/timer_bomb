@@ -50,6 +50,7 @@ uint16_t millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
 uint8_t *p_data = spi_data;
+uint16_t seconds_value = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -62,6 +63,7 @@ void Set_Digit_Value(uint8_t digit);
 void Set_Digit_Index(uint8_t index);
 void Transmit_SPI(void);
 void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3);
+void Display_Time(uint16_t seconds);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -105,23 +107,7 @@ int main(void)
   UART_Init();
   HAL_TIM_Base_Start_IT(&htim1); // запуск таймера
 
-//  LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_0, LL_GPIO_MODE_OUTPUT); //Digit 0 (low to activate)
-//  LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_1, LL_GPIO_MODE_OUTPUT); //Digit 1
-//  LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_2, LL_GPIO_MODE_OUTPUT); //Digit 2
-//  LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_15, LL_GPIO_MODE_OUTPUT); //Digit 3
   LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_4, LL_GPIO_MODE_OUTPUT); //SPI latch
-
-//  LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_0);
-//  LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_8);
-//  LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_2);
-//  LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_15);
-
-//  LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_4);
-
-//  Set_Digit_Value(3);
-//  Set_Digit_Index(2);
-//  Transmit_SPI();
-
 
   /* USER CODE END 2 */
 
@@ -129,7 +115,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  Display_Digits(1,2,3,4);
+//	  Display_Digits(1,2,3,4);
+	  Display_Time(seconds_value);
   }
   /* USER CODE END 3 */
 }
@@ -302,6 +289,9 @@ static void UART_Init(void){
 void One_Second_Tick(void){
 	USART1->DR = 0x53;
 
+	seconds_value++;
+	if(seconds_value == 6000)
+		seconds_value = 0;
 
 }
 
@@ -358,7 +348,18 @@ void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t d
 
 }
 
+void Display_Time(uint16_t seconds){
 
+	uint8_t minutesToDisplay = seconds / 60;
+	uint8_t secondsToDisplay = seconds % 60;
+
+	uint8_t digit0 = minutesToDisplay / 10;
+	uint8_t digit1 = minutesToDisplay % 10;
+	uint8_t digit2 = secondsToDisplay / 10;
+	uint8_t digit3 = secondsToDisplay % 10;
+
+	Display_Digits(digit0, digit1, digit2, digit3);
+}
 
 /* USER CODE END 4 */
 
