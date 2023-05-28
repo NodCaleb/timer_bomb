@@ -48,7 +48,8 @@ TIM_HandleTypeDef htim1;
 /* USER CODE BEGIN PV */
 uint16_t millis = 0;
 uint8_t led_state = 0;
-uint8_t spi_data = 0;
+uint8_t spi_data[2]; //0 - index, 1 - value
+uint8_t *p_data = spi_data;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,7 +58,9 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 static void UART_Init(void);
-void Display_Digit(uint8_t digit);
+void Set_Digit_Value(uint8_t digit);
+void Set_Digit_Index(uint8_t index);
+void Transmit_SPI(void);
 void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3);
 /* USER CODE BEGIN PFP */
 
@@ -115,7 +118,10 @@ int main(void)
 
 //  LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_4);
 
-  Display_Digit(6);
+//  Set_Digit_Value(3);
+//  Set_Digit_Index(2);
+//  Transmit_SPI();
+
 
   /* USER CODE END 2 */
 
@@ -123,9 +129,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
+	  Display_Digits(1,2,3,4);
   }
   /* USER CODE END 3 */
 }
@@ -301,43 +305,55 @@ void One_Second_Tick(void){
 
 }
 
-void Display_Digit(uint8_t digit){
+void Set_Digit_Value(uint8_t digit){
 	switch (digit){
-	case 0: spi_data = DIGIT_0;	break;
-	case 1: spi_data = DIGIT_1;	break;
-	case 2: spi_data = DIGIT_2;	break;
-	case 3: spi_data = DIGIT_3;	break;
-	case 4: spi_data = DIGIT_4;	break;
-	case 5: spi_data = DIGIT_5;	break;
-	case 6: spi_data = DIGIT_6;	break;
-	case 7: spi_data = DIGIT_7;	break;
-	case 8: spi_data = DIGIT_8;	break;
-	case 9: spi_data = DIGIT_9;	break;
-	default: spi_data = 0x00; break;
+	case 0: spi_data[1] = DIGIT_0;	break;
+	case 1: spi_data[1] = DIGIT_1;	break;
+	case 2: spi_data[1] = DIGIT_2;	break;
+	case 3: spi_data[1] = DIGIT_3;	break;
+	case 4: spi_data[1] = DIGIT_4;	break;
+	case 5: spi_data[1] = DIGIT_5;	break;
+	case 6: spi_data[1] = DIGIT_6;	break;
+	case 7: spi_data[1] = DIGIT_7;	break;
+	case 8: spi_data[1] = DIGIT_8;	break;
+	case 9: spi_data[1] = DIGIT_9;	break;
+	default: spi_data[1] = 0x00; break;
 	}
+}
 
+void Set_Digit_Index(uint8_t index){
+	switch (index){
+	case 0: spi_data[0] = SHOW_0;	break;
+	case 1: spi_data[0] = SHOW_1;	break;
+	case 2: spi_data[0] = SHOW_2;	break;
+	case 3: spi_data[0] = SHOW_3;	break;
+	default: spi_data[0] = 0x00; break;
+	}
+}
+
+void Transmit_SPI(void){
 	LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_4);
-	HAL_SPI_Transmit(&hspi1, &spi_data, 1, 0xFFFF);
+	HAL_SPI_Transmit(&hspi1, p_data, 2, 0xFFFF);
 	LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_4);
 }
 
 void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3){
 
-	Display_Digit(digit_0);
-	LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_0);
-	LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_0);
+	Set_Digit_Value(digit_0);
+	Set_Digit_Index(0);
+	Transmit_SPI();
 
-	Display_Digit(digit_1);
-	LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_1);
-	LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_1);
+	Set_Digit_Value(digit_1);
+	Set_Digit_Index(1);
+	Transmit_SPI();
 
-	Display_Digit(digit_2);
-	LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_2);
-	LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_2);
+	Set_Digit_Value(digit_2);
+	Set_Digit_Index(2);
+	Transmit_SPI();
 
-	Display_Digit(digit_3);
-	LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_3);
-	LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_3);
+	Set_Digit_Value(digit_3);
+	Set_Digit_Index(3);
+	Transmit_SPI();
 
 }
 
