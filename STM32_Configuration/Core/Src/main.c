@@ -34,10 +34,12 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define spi_latch_pin	LL_GPIO_PIN_4
-#define rt_dt_pin 		LL_GPIO_PIN_3
-#define rt_sw_pin		LL_GPIO_PIN_2
-#define play_pause_pin	LL_GPIO_PIN_1
-#define stop_pin		LL_GPIO_PIN_0
+#define input_port		GPIOB
+#define play_pause_pin	GPIO_PIN_3
+#define stop_pin		GPIO_PIN_4
+#define rt_clk_pin		GPIO_PIN_5
+#define rt_dt_pin		LL_GPIO_PIN_6
+#define debounse_time	100
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -55,7 +57,9 @@ uint16_t cool_down_millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
 uint8_t *p_data = spi_data;
-uint16_t seconds_value = 0;
+uint16_t initial_seconds = 30;
+uint16_t current_seconds = 0;
+uint8_t armed = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,6 +69,7 @@ static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 static void UART_Init(void);
 void One_Second_Tick(void);
+uint8_t Seconds_Step(uint16_t value);
 void Set_Digit_Value(uint8_t digit);
 void Set_Digit_Index(uint8_t index);
 void Transmit_SPI(void);
@@ -115,6 +120,8 @@ int main(void)
 
   USART1->DR = 0x53; //Start MCU debug signal
 
+  current_seconds = initial_seconds;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -122,7 +129,7 @@ int main(void)
   while (1)
   {
 //	  Display_Digits(1,2,3,4);
-	  Display_Time(seconds_value);
+	  Display_Time(current_seconds);
   }
   /* USER CODE END 3 */
 }
@@ -261,43 +268,24 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-//  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   //SPI latch config
 	LL_GPIO_SetPinMode(GPIOA, spi_latch_pin, LL_GPIO_MODE_OUTPUT);
 	LL_GPIO_SetPinOutputType(GPIOA, spi_latch_pin, LL_GPIO_OUTPUT_PUSHPULL);
 
-	/*Configure GPIO pin : PA0 */
-	  GPIO_InitStruct.Pin = GPIO_PIN_0;
-	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-	  GPIO_InitStruct.Pull = GPIO_PULLUP;
-	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	/*Configure GPIO pins : PB5 PB6 PB7 */
+	GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+	GPIO_InitStruct.Pull = GPIO_PULLUP;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	  /* EXTI interrupt init*/
-	  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-	  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+	/* EXTI interrupt init*/
+	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
-	/*Configure GPIO pin : PA1 */
-	  GPIO_InitStruct.Pin = GPIO_PIN_1;
-	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-	  GPIO_InitStruct.Pull = GPIO_PULLUP;
-	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	  /* EXTI interrupt init*/
-	  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-	  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-
-//	LL_GPIO_SetPinMode(GPIOA, rt_dt_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinPull(GPIOA, rt_dt_pin, LL_GPIO_PULL_DOWN);
-//
-//	LL_GPIO_SetPinMode(GPIOA, rt_sw_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinMode(GPIOA, rt_sw_pin, LL_GPIO_PULL_DOWN);
-//
-//	LL_GPIO_SetPinPull(GPIOA, play_pause_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinMode(GPIOA, play_pause_pin, LL_GPIO_PULL_UP);
-//
-//	LL_GPIO_SetPinPull(GPIOA, stop_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinPull(GPIOA, stop_pin, LL_GPIO_PULL_UP);
+	LL_GPIO_SetPinMode(input_port, rt_dt_pin, LL_GPIO_MODE_INPUT);
+	LL_GPIO_SetPinPull(input_port, rt_dt_pin, LL_GPIO_PULL_DOWN);
 }
 
 /* USER CODE BEGIN 4 */
@@ -329,23 +317,45 @@ static void UART_Init(void){
 //External Interrupt ISR Handler CallBackFun
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if(GPIO_Pin == GPIO_PIN_0) // Play/pause button
-    {
-    	if (cool_down_millis == 0){
-    		cool_down_millis = 200;
-    		USART1->DR = 0x30; //Debug signal
-    		seconds_value = 0;
-    	}
-    }
+	if (cool_down_millis == 0){
+		cool_down_millis = debounse_time;
 
-    if(GPIO_Pin == GPIO_PIN_1) // Play/pause button
-    {
-    	if (cool_down_millis == 0){
-    		cool_down_millis = 200;
-    		USART1->DR = 0x31; //Debug signal
-    		seconds_value += 5;
-    	}
-    }
+		if(GPIO_Pin == GPIO_PIN_5) // Play/pause button
+		{
+			USART1->DR = 0x30; //Debug signal
+			if (armed == 0 && current_seconds > 0){
+				armed = 1;
+				millis = 0; //To make first second to pass after 1 second after button push
+			}
+			else if (armed == 1){
+				armed = 0;
+			}
+		}
+
+		if(GPIO_Pin == stop_pin) // Play/pause button
+		{
+			USART1->DR = 0x31; //Debug signal
+			current_seconds = initial_seconds;
+			armed = 0;
+		}
+
+		if(GPIO_Pin == rt_clk_pin) // Play/pause button
+		{
+			if( LL_GPIO_IsInputPinSet(input_port, rt_dt_pin) != 0 ) {
+				USART1->DR = 0x3E; //Debug signal
+				current_seconds++;// += Seconds_Step(current_seconds);
+			}
+			else {
+				USART1->DR = 0x3C; //Debug signal
+				current_seconds--;// += Seconds_Step(current_seconds-1);
+			}
+
+			if(current_seconds < 0) current_seconds = 0;
+
+			initial_seconds = current_seconds;
+		}
+	}
+
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
@@ -357,8 +367,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			One_Second_Tick();
 		}
 
-		if(cool_down_millis > 0)
-			cool_down_millis--;
+		if(cool_down_millis > 0) cool_down_millis--;
 	}
 }
 
@@ -367,10 +376,21 @@ void One_Second_Tick(void){
 
 	//USART1->DR = 0x53; Send char 'S' to UART (to test that UART and timer work)
 
-	seconds_value++;
-	if(seconds_value == 3600)
-		seconds_value = 0;
+	if (armed == 1){
+		current_seconds--;
+		if (current_seconds == 0){
+			armed = 0;
+		}
+	}
 
+}
+
+uint8_t Seconds_Step(uint16_t value){
+  if (value < 0) return 0; //To prevent negative values
+  if (value < 30) return 5;
+  if (value < 120) return 10;
+  if (value < 300) return 30;
+  return 60;
 }
 
 void Set_Digit_Value(uint8_t digit){
@@ -411,17 +431,33 @@ void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t d
 	Set_Digit_Index(0);
 	Transmit_SPI();
 
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
+	Transmit_SPI();
+
 	Set_Digit_Value(digit_1);
 	Set_Digit_Index(1);
 	spi_data[1] |= 0x80; //Display dots
+	Transmit_SPI();
+
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
 	Transmit_SPI();
 
 	Set_Digit_Value(digit_2);
 	Set_Digit_Index(2);
 	Transmit_SPI();
 
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
+	Transmit_SPI();
+
 	Set_Digit_Value(digit_3);
 	Set_Digit_Index(3);
+	Transmit_SPI();
+
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
 	Transmit_SPI();
 
 }
