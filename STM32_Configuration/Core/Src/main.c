@@ -19,7 +19,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "digits.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -104,8 +103,8 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  USART1->DR = 0x53; //Start MCU debug signal
-  HAL_TIM_Base_Start_IT(&htim1); // запуск таймера
+  USART1->DR = 0x3E; //Start MCU debug signal
+  HAL_TIM_Base_Start_IT(&htim1); // start timer
 
   /* USER CODE END 2 */
 
@@ -289,22 +288,37 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+
   /*Configure GPIO pins : PA1 PA2 PA3 */
   GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PB0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PB5 PB6 PB7 PB8 */
   GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 
 /* USER CODE BEGIN 4 */
 
+//Process timer interrupts
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	if(htim == &htim1){ //Check if it's TIM1
@@ -322,11 +336,32 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 //Ticks once per second
 void One_Second_Tick(void){
 
-	USART1->DR = 0x2E; //Send char '.' to UART (to test that UART and timer work)
+	//USART1->DR = 0x2E; //Send char '.' to UART (to test that UART and timer work)
 
 	seconds_value++;
 	if(seconds_value == 3600)
 		seconds_value = 0;
+
+}
+
+//Process buttons interrupts
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if (cool_down_millis == 0)
+	{
+		cool_down_millis = 200;
+
+		if(GPIO_Pin == GPIO_PIN_5) // Play/pause button
+		{
+			USART1->DR = 0x50; //Debug signal
+		}
+
+		if(GPIO_Pin == GPIO_PIN_6) // Stop button
+		{
+			USART1->DR = 0x53; //Debug signal
+		}
+	}
+
 
 }
 
