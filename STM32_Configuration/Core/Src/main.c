@@ -32,6 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define debounse_time	100
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -349,7 +350,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if (cool_down_millis == 0)
 	{
-		cool_down_millis = 200;
+		cool_down_millis = debounse_time;
 
 		if(GPIO_Pin == GPIO_PIN_5) // Play/pause button
 		{
@@ -360,9 +361,28 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		{
 			USART1->DR = 0x53; //Debug signal
 		}
+
+		if(GPIO_Pin == GPIO_PIN_7) // Rotary encoder
+		{
+			if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
+				USART1->DR = 0x2B; //Debug signal
+				//current_seconds++;// += Seconds_Step(current_seconds);
+			}
+			else {
+				USART1->DR = 0x2D; //Debug signal
+				//current_seconds--;// += Seconds_Step(current_seconds-1);
+			}
+
+//			if(current_seconds < 0) current_seconds = 0;
+//
+//			initial_seconds = current_seconds;
+		}
+
+		if(GPIO_Pin == GPIO_PIN_8) // Encoder press
+		{
+			USART1->DR = 0x30; //Debug signal
+		}
 	}
-
-
 }
 
 /* USER CODE END 4 */
