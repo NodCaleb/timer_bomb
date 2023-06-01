@@ -33,11 +33,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define spi_latch_pin	LL_GPIO_PIN_4
-#define rt_dt_pin 		LL_GPIO_PIN_3
-#define rt_sw_pin		LL_GPIO_PIN_2
-#define play_pause_pin	LL_GPIO_PIN_1
-#define stop_pin		LL_GPIO_PIN_0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,7 +42,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
+
 TIM_HandleTypeDef htim1;
+
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 uint16_t millis = 0;
@@ -63,15 +61,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
-static void UART_Init(void);
-void One_Second_Tick(void);
-void Set_Digit_Value(uint8_t digit);
-void Set_Digit_Index(uint8_t index);
-void Transmit_SPI(void);
-void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3);
-void Display_Time(uint16_t seconds);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+void One_Second_Tick(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -109,11 +101,11 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI1_Init();
   MX_TIM1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  UART_Init();
-  HAL_TIM_Base_Start_IT(&htim1); // запуск таймера
 
   USART1->DR = 0x53; //Start MCU debug signal
+  HAL_TIM_Base_Start_IT(&htim1); // запуск таймера
 
   /* USER CODE END 2 */
 
@@ -121,8 +113,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	  Display_Digits(1,2,3,4);
-	  Display_Time(seconds_value);
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -188,7 +181,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32; //Lower value will be too fast for 74HC595
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -250,103 +243,67 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
   */
 static void MX_GPIO_Init(void)
 {
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-//  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  //SPI latch config
-	LL_GPIO_SetPinMode(GPIOA, spi_latch_pin, LL_GPIO_MODE_OUTPUT);
-	LL_GPIO_SetPinOutputType(GPIOA, spi_latch_pin, LL_GPIO_OUTPUT_PUSHPULL);
+  /*Configure GPIO pins : PA1 PA2 PA3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-	/*Configure GPIO pin : PA0 */
-	  GPIO_InitStruct.Pin = GPIO_PIN_0;
-	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-	  GPIO_InitStruct.Pull = GPIO_PULLUP;
-	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pins : PB5 PB6 PB7 PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	  /* EXTI interrupt init*/
-	  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-	  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-
-	/*Configure GPIO pin : PA1 */
-	  GPIO_InitStruct.Pin = GPIO_PIN_1;
-	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-	  GPIO_InitStruct.Pull = GPIO_PULLUP;
-	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	  /* EXTI interrupt init*/
-	  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-	  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-
-//	LL_GPIO_SetPinMode(GPIOA, rt_dt_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinPull(GPIOA, rt_dt_pin, LL_GPIO_PULL_DOWN);
-//
-//	LL_GPIO_SetPinMode(GPIOA, rt_sw_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinMode(GPIOA, rt_sw_pin, LL_GPIO_PULL_DOWN);
-//
-//	LL_GPIO_SetPinPull(GPIOA, play_pause_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinMode(GPIOA, play_pause_pin, LL_GPIO_PULL_UP);
-//
-//	LL_GPIO_SetPinPull(GPIOA, stop_pin, LL_GPIO_MODE_INPUT);
-//	LL_GPIO_SetPinPull(GPIOA, stop_pin, LL_GPIO_PULL_UP);
 }
 
 /* USER CODE BEGIN 4 */
-static void UART_Init(void){
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN; // включаем тактирование UART1
-	// настройка вывода PA9 (TX1) на режим альтернативной функции с активным выходом
-	// Биты CNF = 10, ,биты MODE = X1
-	GPIOA->CRH &= (~GPIO_CRH_CNF9_0);
-	GPIOA->CRH |= (GPIO_CRH_CNF9_1 | GPIO_CRH_MODE9);
-
-	// настройка вывода PA10 (RX1) на режим входа с подтягивающим резистором
-	// Биты CNF = 10, ,биты MODE = 00, ODR = 1
-	GPIOA->CRH &= (~GPIO_CRH_CNF10_0);
-	GPIOA->CRH |= GPIO_CRH_CNF10_1;
-	GPIOA->CRH &= (~(GPIO_CRH_MODE10));
-	GPIOA->BSRR |= GPIO_ODR_ODR10;
-
-	// конфигурация UART1
-	USART1->CR1 = USART_CR1_UE; // разрешаем USART1, сбрасываем остальные биты
-	USART1->BRR = 7500; // скорость 9600 бод
-	USART1->CR1 |= USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE; // разрешаем приемник, передатчик и прерывание по приему
-	USART1->CR2 = 0;
-	USART1->CR3 = 0;
-
-	// разрешения прерывания UART1 в контроллере прерываний
-	NVIC_EnableIRQ (USART1_IRQn);
-}
-
-//External Interrupt ISR Handler CallBackFun
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    if(GPIO_Pin == GPIO_PIN_0) // Play/pause button
-    {
-    	if (cool_down_millis == 0){
-    		cool_down_millis = 200;
-    		USART1->DR = 0x30; //Debug signal
-    		seconds_value = 0;
-    	}
-    }
-
-    if(GPIO_Pin == GPIO_PIN_1) // Play/pause button
-    {
-    	if (cool_down_millis == 0){
-    		cool_down_millis = 200;
-    		USART1->DR = 0x31; //Debug signal
-    		seconds_value += 5;
-    	}
-    }
-}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
@@ -365,78 +322,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 //Ticks once per second
 void One_Second_Tick(void){
 
-	//USART1->DR = 0x53; Send char 'S' to UART (to test that UART and timer work)
+	USART1->DR = 0x2E; //Send char '.' to UART (to test that UART and timer work)
 
 	seconds_value++;
 	if(seconds_value == 3600)
 		seconds_value = 0;
 
-}
-
-void Set_Digit_Value(uint8_t digit){
-	switch (digit){
-	case 0: spi_data[1] = DIGIT_0;	break;
-	case 1: spi_data[1] = DIGIT_1;	break;
-	case 2: spi_data[1] = DIGIT_2;	break;
-	case 3: spi_data[1] = DIGIT_3;	break;
-	case 4: spi_data[1] = DIGIT_4;	break;
-	case 5: spi_data[1] = DIGIT_5;	break;
-	case 6: spi_data[1] = DIGIT_6;	break;
-	case 7: spi_data[1] = DIGIT_7;	break;
-	case 8: spi_data[1] = DIGIT_8;	break;
-	case 9: spi_data[1] = DIGIT_9;	break;
-	default: spi_data[1] = 0x00; break;
-	}
-}
-
-void Set_Digit_Index(uint8_t index){
-	switch (index){
-	case 0: spi_data[0] = SHOW_0;	break;
-	case 1: spi_data[0] = SHOW_1;	break;
-	case 2: spi_data[0] = SHOW_2;	break;
-	case 3: spi_data[0] = SHOW_3;	break;
-	default: spi_data[0] = 0x00; break;
-	}
-}
-
-void Transmit_SPI(void){
-	LL_GPIO_ResetOutputPin(GPIOA, spi_latch_pin);
-	HAL_SPI_Transmit(&hspi1, p_data, 2, 0xFFFF);
-	LL_GPIO_SetOutputPin(GPIOA, spi_latch_pin);
-}
-
-void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3){
-
-	Set_Digit_Value(digit_0);
-	Set_Digit_Index(0);
-	Transmit_SPI();
-
-	Set_Digit_Value(digit_1);
-	Set_Digit_Index(1);
-	spi_data[1] |= 0x80; //Display dots
-	Transmit_SPI();
-
-	Set_Digit_Value(digit_2);
-	Set_Digit_Index(2);
-	Transmit_SPI();
-
-	Set_Digit_Value(digit_3);
-	Set_Digit_Index(3);
-	Transmit_SPI();
-
-}
-
-void Display_Time(uint16_t seconds){
-
-	uint8_t minutesToDisplay = seconds / 60;
-	uint8_t secondsToDisplay = seconds % 60;
-
-	uint8_t digit0 = minutesToDisplay / 10;
-	uint8_t digit1 = minutesToDisplay % 10;
-	uint8_t digit2 = secondsToDisplay / 10;
-	uint8_t digit3 = secondsToDisplay % 10;
-
-	Display_Digits(digit0, digit1, digit2, digit3);
 }
 
 /* USER CODE END 4 */
