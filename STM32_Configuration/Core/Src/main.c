@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "digits.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,7 +53,9 @@ uint16_t cool_down_millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
 uint8_t *p_data = spi_data;
-uint16_t seconds_value = 0;
+uint16_t initial_seconds = 30;
+uint16_t current_seconds = 0;
+uint8_t armed = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,6 +66,12 @@ static void MX_TIM1_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void One_Second_Tick(void);
+uint8_t Seconds_Step(uint16_t value);
+void Set_Digit_Value(uint8_t digit);
+void Set_Digit_Index(uint8_t index);
+void Transmit_SPI(void);
+void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3);
+void Display_Time(uint16_t seconds);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -113,6 +121,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  Display_Time(current_seconds);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -181,7 +191,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -339,9 +349,9 @@ void One_Second_Tick(void){
 
 	//USART1->DR = 0x2E; //Send char '.' to UART (to test that UART and timer work)
 
-	seconds_value++;
-	if(seconds_value == 3600)
-		seconds_value = 0;
+	current_seconds++;
+	if(current_seconds == 3600)
+		current_seconds = 0;
 
 }
 
@@ -362,7 +372,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			USART1->DR = 0x53; //Debug signal
 		}
 
-		if(GPIO_Pin == GPIO_PIN_7) // Rotary encoder
+		if(GPIO_Pin == GPIO_PIN_7) // Rotary encoder +/-
 		{
 			if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
 				USART1->DR = 0x2B; //Debug signal
@@ -383,6 +393,96 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			USART1->DR = 0x30; //Debug signal
 		}
 	}
+}
+
+uint8_t Seconds_Step(uint16_t value){
+  if (value < 0) return 0; //To prevent negative values
+  if (value < 30) return 5;
+  if (value < 120) return 10;
+  if (value < 300) return 30;
+  return 60;
+}
+
+void Set_Digit_Value(uint8_t digit){
+	switch (digit){
+	case 0: spi_data[1] = DIGIT_0;	break;
+	case 1: spi_data[1] = DIGIT_1;	break;
+	case 2: spi_data[1] = DIGIT_2;	break;
+	case 3: spi_data[1] = DIGIT_3;	break;
+	case 4: spi_data[1] = DIGIT_4;	break;
+	case 5: spi_data[1] = DIGIT_5;	break;
+	case 6: spi_data[1] = DIGIT_6;	break;
+	case 7: spi_data[1] = DIGIT_7;	break;
+	case 8: spi_data[1] = DIGIT_8;	break;
+	case 9: spi_data[1] = DIGIT_9;	break;
+	default: spi_data[1] = 0x00; break;
+	}
+}
+
+void Set_Digit_Index(uint8_t index){
+	switch (index){
+	case 0: spi_data[0] = SHOW_0;	break;
+	case 1: spi_data[0] = SHOW_1;	break;
+	case 2: spi_data[0] = SHOW_2;	break;
+	case 3: spi_data[0] = SHOW_3;	break;
+	default: spi_data[0] = 0x00; break;
+	}
+}
+
+void Transmit_SPI(void){
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, p_data, 2, 0xFFFF);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+}
+
+void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3){
+
+	Set_Digit_Value(digit_0);
+	Set_Digit_Index(0);
+	Transmit_SPI();
+
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
+	Transmit_SPI();
+
+	Set_Digit_Value(digit_1);
+	Set_Digit_Index(1);
+	spi_data[1] |= 0x80; //Display dots
+	Transmit_SPI();
+
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
+	Transmit_SPI();
+
+	Set_Digit_Value(digit_2);
+	Set_Digit_Index(2);
+	Transmit_SPI();
+
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
+	Transmit_SPI();
+
+	Set_Digit_Value(digit_3);
+	Set_Digit_Index(3);
+	Transmit_SPI();
+
+	spi_data[0] = 0x00;
+	spi_data[1] = 0x0F;
+	Transmit_SPI();
+
+}
+
+void Display_Time(uint16_t seconds){
+
+	uint8_t minutesToDisplay = seconds / 60;
+	uint8_t secondsToDisplay = seconds % 60;
+
+	uint8_t digit0 = minutesToDisplay / 10;
+	uint8_t digit1 = minutesToDisplay % 10;
+	uint8_t digit2 = secondsToDisplay / 10;
+	uint8_t digit3 = secondsToDisplay % 10;
+
+	Display_Digits(digit0, digit1, digit2, digit3);
 }
 
 /* USER CODE END 4 */
