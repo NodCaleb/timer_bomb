@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "digits.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,9 +54,10 @@ uint16_t cool_down_millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
 uint8_t *p_data = spi_data;
-uint16_t initial_seconds = 30;
+uint16_t initial_seconds = 0;
 uint16_t current_seconds = 0;
 uint8_t armed = 0;
+uint8_t str[4];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,6 +74,7 @@ void Set_Digit_Index(uint8_t index);
 void Transmit_SPI(void);
 void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3);
 void Display_Time(uint16_t seconds);
+void Send_Time_Uart(uint16_t seconds);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -349,10 +352,13 @@ void One_Second_Tick(void){
 
 	//USART1->DR = 0x2E; //Send char '.' to UART (to test that UART and timer work)
 
-	current_seconds++;
-	if(current_seconds == 3600)
-		current_seconds = 0;
-
+	if (armed == 1){
+		current_seconds--;
+		Send_Time_Uart(current_seconds);
+		if (current_seconds == 0){
+			armed = 0;
+		}
+	}
 }
 
 //Process buttons interrupts
@@ -365,32 +371,51 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		if(GPIO_Pin == GPIO_PIN_5) // Play/pause button
 		{
 			USART1->DR = 0x50; //Debug signal
+			if (armed == 0 && current_seconds > 0){
+				armed = 1;
+				millis = 0; //To make first second to pass after 1 second after button push
+			}
+			else if (armed == 1){
+				armed = 0;
+			}
 		}
 
 		if(GPIO_Pin == GPIO_PIN_6) // Stop button
 		{
 			USART1->DR = 0x53; //Debug signal
+			current_seconds = initial_seconds;
+			armed = 0;
 		}
 
-		if(GPIO_Pin == GPIO_PIN_7) // Rotary encoder +/-
+		if(GPIO_Pin == GPIO_PIN_7 && armed == 0) // Rotary encoder +/-
 		{
 			if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
-				USART1->DR = 0x2B; //Debug signal
-				//current_seconds++;// += Seconds_Step(current_seconds);
+				//USART1->DR = 0x2B; //Debug signal
+				current_seconds += Seconds_Step(current_seconds);
 			}
 			else {
-				USART1->DR = 0x2D; //Debug signal
-				//current_seconds--;// += Seconds_Step(current_seconds-1);
+				//USART1->DR = 0x2D; //Debug signal
+				if (current_seconds <= 5){
+					current_seconds = 0;
+				}
+				else{
+					current_seconds -= Seconds_Step(current_seconds-1);
+				}
+
 			}
 
-//			if(current_seconds < 0) current_seconds = 0;
-//
-//			initial_seconds = current_seconds;
+			if(current_seconds < 0) current_seconds = 0;
+
+			initial_seconds = current_seconds;
+
+			Send_Time_Uart(current_seconds);
 		}
 
-		if(GPIO_Pin == GPIO_PIN_8) // Encoder press
+		if(GPIO_Pin == GPIO_PIN_8 && armed == 0) // Encoder press
 		{
 			USART1->DR = 0x30; //Debug signal
+			initial_seconds = 0;
+			current_seconds = 0;
 		}
 	}
 }
@@ -483,6 +508,11 @@ void Display_Time(uint16_t seconds){
 	uint8_t digit3 = secondsToDisplay % 10;
 
 	Display_Digits(digit0, digit1, digit2, digit3);
+}
+
+void Send_Time_Uart(uint16_t seconds){
+	sprintf(&str, "%4d", seconds);
+	HAL_UART_Transmit_IT(&huart1, str, 4);
 }
 
 /* USER CODE END 4 */
