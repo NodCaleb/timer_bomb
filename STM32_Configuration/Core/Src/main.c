@@ -56,7 +56,6 @@ uint16_t cool_down_millis = 0;
 uint16_t beep_millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
-uint8_t *p_data = spi_data;
 uint16_t initial_seconds = 0;
 uint16_t current_seconds = 0;
 uint8_t armed = 0;
@@ -485,7 +484,7 @@ void Set_Digit_Index(uint8_t index){
 
 void Transmit_SPI(void){
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(&hspi1, p_data, 2, 0xFFFF);
+	HAL_SPI_Transmit(&hspi1, spi_data, 2, 0xFFFF);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
