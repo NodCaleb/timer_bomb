@@ -34,6 +34,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define debounse_time	100
+#define short_beep		200
+#define long_beep		2000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,12 +53,14 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 uint16_t millis = 0;
 uint16_t cool_down_millis = 0;
+uint16_t beep_millis = 0;
 uint8_t led_state = 0;
 uint8_t spi_data[2]; //0 - index, 1 - value
 uint8_t *p_data = spi_data;
 uint16_t initial_seconds = 0;
 uint16_t current_seconds = 0;
 uint8_t armed = 0;
+uint8_t beeping = 0;
 uint8_t str[4];
 /* USER CODE END PV */
 
@@ -125,6 +129,15 @@ int main(void)
   while (1)
   {
 	  Display_Time(current_seconds);
+
+	  if (beep_millis > 0 && beeping == 0){
+		  beeping = 1;
+		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+	  }
+	  if (beep_millis == 0 && beeping == 1){
+		  beeping = 0;
+		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+	  }
 
     /* USER CODE END WHILE */
 
@@ -344,6 +357,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 		if(cool_down_millis > 0)
 			cool_down_millis--;
+
+		if(beep_millis > 0)
+			beep_millis--;
 	}
 }
 
@@ -357,6 +373,13 @@ void One_Second_Tick(void){
 		Send_Time_Uart(current_seconds);
 		if (current_seconds == 0){
 			armed = 0;
+			if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2) == GPIO_PIN_SET)		//Long beep in the end
+				beep_millis = long_beep;
+			else														//Short beep in the end
+				beep_millis = short_beep;
+		}
+		else if (current_seconds <= 5 && HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3) == GPIO_PIN_SET){
+			beep_millis = short_beep;									//Warning beep if <= 5 seconds
 		}
 	}
 }
@@ -371,6 +394,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		if(GPIO_Pin == GPIO_PIN_5) // Play/pause button
 		{
 			USART1->DR = 0x50; //Debug signal
+			cool_down_millis += debounse_time; //Additional cooldown
+			beep_millis = short_beep;
 			if (armed == 0 && current_seconds > 0){
 				armed = 1;
 				millis = 0; //To make first second to pass after 1 second after button push
@@ -383,6 +408,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		if(GPIO_Pin == GPIO_PIN_6) // Stop button
 		{
 			USART1->DR = 0x53; //Debug signal
+			cool_down_millis += debounse_time; //Additional cooldown
+			beep_millis = short_beep;
 			current_seconds = initial_seconds;
 			armed = 0;
 		}
@@ -414,6 +441,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		if(GPIO_Pin == GPIO_PIN_8 && armed == 0) // Encoder press
 		{
 			USART1->DR = 0x30; //Debug signal
+			cool_down_millis += debounse_time; //Additional cooldown
+			beep_millis = short_beep;
 			initial_seconds = 0;
 			current_seconds = 0;
 		}
