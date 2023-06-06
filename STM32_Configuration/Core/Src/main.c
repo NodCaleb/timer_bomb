@@ -59,7 +59,6 @@ uint8_t spi_data[2]; //0 - index, 1 - value
 uint16_t initial_seconds = 0;
 uint16_t current_seconds = 0;
 uint8_t armed = 0;
-uint8_t beeping = 0;
 uint8_t str[4];
 /* USER CODE END PV */
 
@@ -73,10 +72,10 @@ static void MX_USART1_UART_Init(void);
 void One_Second_Tick(void);
 uint8_t Seconds_Step(uint16_t value);
 void Set_Digit_Value(uint8_t digit);
-void Set_Digit_Index(uint8_t index);
+void Set_Digit_Index_And_Sound(uint8_t index, uint16_t beep);
 void Transmit_SPI(void);
-void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3);
-void Display_Time(uint16_t seconds);
+void Display_Data(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3, uint16_t beep);
+void Output_Time_And_Sound(uint16_t seconds, uint16_t beep);
 void Send_Time_Uart(uint16_t seconds);
 /* USER CODE END PFP */
 
@@ -121,13 +120,7 @@ int main(void)
   USART1->DR = 0x3E; //Start MCU debug signal
   HAL_TIM_Base_Start_IT(&htim1); // start timer
 
-    spi_data[0] = 0x0E;
-    spi_data[1] = 0x07;
-
-    //Transmit SPI data
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_SPI_Transmit_IT(&hspi1, spi_data, 2);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+  beep_millis = short_beep; //Start sound
 
   /* USER CODE END 2 */
 
@@ -135,16 +128,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  Display_Time(current_seconds);
-
-	  if (beep_millis > 0 && beeping == 0){
-		  beeping = 1;
-		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
-	  }
-	  if (beep_millis == 0 && beeping == 1){
-		  beeping = 0;
-		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
-	  }
+	  Output_Time_And_Sound(current_seconds, beep_millis);
 
     /* USER CODE END WHILE */
 
@@ -325,9 +309,6 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
-
   /*Configure GPIO pin : PA1 */
   GPIO_InitStruct.Pin = GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -346,13 +327,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PB0 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB5 PB6 PB7 PB8 */
   GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8;
@@ -496,13 +470,17 @@ void Set_Digit_Value(uint8_t digit){
 	}
 }
 
-void Set_Digit_Index(uint8_t index){
+void Set_Digit_Index_And_Sound(uint8_t index, uint16_t beep){
 	switch (index){
 	case 0: spi_data[0] = SHOW_0;	break;
 	case 1: spi_data[0] = SHOW_1;	break;
 	case 2: spi_data[0] = SHOW_2;	break;
 	case 3: spi_data[0] = SHOW_3;	break;
 	default: spi_data[0] = 0x00; break;
+	}
+
+	if (beep > 0){
+		spi_data[0] |= 0x80; //Beeper on
 	}
 }
 
@@ -512,28 +490,28 @@ void Transmit_SPI(void){
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
-void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3){
+void Display_Data(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t digit_3, uint16_t beep){
 
 	Set_Digit_Value(digit_0);
-	Set_Digit_Index(0);
+	Set_Digit_Index_And_Sound(0, beep);
 	Transmit_SPI();
 
 	Set_Digit_Value(digit_1);
-	Set_Digit_Index(1);
+	Set_Digit_Index_And_Sound(1, beep);
 	spi_data[1] |= 0x80; //Display dots
 	Transmit_SPI();
 
 	Set_Digit_Value(digit_2);
-	Set_Digit_Index(2);
+	Set_Digit_Index_And_Sound(2, beep);
 	Transmit_SPI();
 
 	Set_Digit_Value(digit_3);
-	Set_Digit_Index(3);
+	Set_Digit_Index_And_Sound(3, beep);
 	Transmit_SPI();
 
 }
 
-void Display_Time(uint16_t seconds){
+void Output_Time_And_Sound(uint16_t seconds, uint16_t beep){
 
 	uint8_t minutesToDisplay = seconds / 60;
 	uint8_t secondsToDisplay = seconds % 60;
@@ -543,7 +521,7 @@ void Display_Time(uint16_t seconds){
 	uint8_t digit2 = secondsToDisplay / 10;
 	uint8_t digit3 = secondsToDisplay % 10;
 
-	Display_Digits(digit0, digit1, digit2, digit3);
+	Display_Data(digit0, digit1, digit2, digit3, beep);
 }
 
 void Send_Time_Uart(uint16_t seconds){
