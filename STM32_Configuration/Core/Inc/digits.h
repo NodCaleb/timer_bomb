@@ -20,3 +20,4 @@
 #define SHOW_1		0x0D
 #define SHOW_2		0x0B
 #define SHOW_3		0x07
+#define SHOW_NONE	0xFF

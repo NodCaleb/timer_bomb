@@ -34,8 +34,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define debounse_time	100
-#define short_beep		200
-#define long_beep		2000
+#define short_beep		100
+#define long_beep		1000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -120,6 +120,14 @@ int main(void)
 
   USART1->DR = 0x3E; //Start MCU debug signal
   HAL_TIM_Base_Start_IT(&htim1); // start timer
+
+    spi_data[0] = 0x0E;
+    spi_data[1] = 0x07;
+
+    //Transmit SPI data
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+    HAL_SPI_Transmit_IT(&hspi1, spi_data, 2);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 
   /* USER CODE END 2 */
 
@@ -315,12 +323,28 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PA1 PA2 PA3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
+  /*Configure GPIO pin : PA1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA2 PA3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB0 */
@@ -484,7 +508,7 @@ void Set_Digit_Index(uint8_t index){
 
 void Transmit_SPI(void){
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(&hspi1, spi_data, 2, 0xFFFF);
+	HAL_SPI_Transmit_IT(&hspi1, spi_data, 2);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
@@ -494,33 +518,17 @@ void Display_Digits(uint8_t digit_0, uint8_t digit_1, uint8_t digit_2, uint8_t d
 	Set_Digit_Index(0);
 	Transmit_SPI();
 
-	spi_data[0] = 0x00;
-	spi_data[1] = 0x0F;
-	Transmit_SPI();
-
 	Set_Digit_Value(digit_1);
 	Set_Digit_Index(1);
 	spi_data[1] |= 0x80; //Display dots
-	Transmit_SPI();
-
-	spi_data[0] = 0x00;
-	spi_data[1] = 0x0F;
 	Transmit_SPI();
 
 	Set_Digit_Value(digit_2);
 	Set_Digit_Index(2);
 	Transmit_SPI();
 
-	spi_data[0] = 0x00;
-	spi_data[1] = 0x0F;
-	Transmit_SPI();
-
 	Set_Digit_Value(digit_3);
 	Set_Digit_Index(3);
-	Transmit_SPI();
-
-	spi_data[0] = 0x00;
-	spi_data[1] = 0x0F;
 	Transmit_SPI();
 
 }
