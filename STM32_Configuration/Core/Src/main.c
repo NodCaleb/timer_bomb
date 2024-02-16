@@ -370,10 +370,18 @@ void One_Second_Tick(void){
 		Send_Time_Uart(current_seconds);
 		if (current_seconds == 0){
 			armed = 0;
+			USART1->DR = 0x45; //E
 			if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2) == GPIO_PIN_SET)		//Long beep in the end
+			{
+				USART1->DR = 0x4C; //L
 				beep_millis = long_beep;
+			}
 			else														//Short beep in the end
+			{
+				USART1->DR = 0x53; //S
 				beep_millis = short_beep;
+			}
+
 		}
 		else if (current_seconds <= 5 && HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3) == GPIO_PIN_SET){
 			beep_millis = short_beep;									//Warning beep if <= 5 seconds
